@@ -3,9 +3,11 @@ import json
 import pandas as pd
 from config import API_KEY
 
+
 class DataGather():
     def __init__(self) -> None:
         self.genre_dictionary = self.__get_genre_dictionary__()
+
 
     def get_movie_data(self, page_num: int):
         """ Call tmddb api to get movie data. """
