@@ -63,7 +63,7 @@ class DataGather():
         url = "https://api.themoviedb.org/3/movie/" + str(movie_id) + "/credits?language=en-US"
         headers = {
             "accept": "application/json",
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIzNGZmNTVjNTkzNjZjMDA1ZTRmNDJiMWEzMDYzZmM3MyIsInN1YiI6IjY1ZWZiYzM4NDFlZWUxMDE2MjU4ZmJhYiIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.y3opq16YWBh_uD-i1kUnI5BIhgnq0yf1OTOamVKe1DI"
+            "Authorization": API_KEY
         }
         response = requests.get(url, headers=headers)
         return json.loads(response.text)
@@ -116,6 +116,7 @@ def main():
     master_movie_data.loc[:, "producers"] = master_movie_data.apply(
         lambda row: data_collector.get_crew("Producer", row["id"]), axis=1)
     master_movie_data.to_csv("Master Movie Dataset.csv")
+
 
 if __name__ == "__main__":
     main()
