@@ -2,13 +2,21 @@
 import requests
 import json
 import pandas as pd
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
 from config import API_KEY
+
+nltk.download('stopwords')
+nltk.download('all')
 
 
 class DataGather():
     """ DataGather class; call TMDB APIs """
     def __init__(self) -> None:
-        self.genre_dictionary = self.__get_genre_dictionary__()
+        self.master_movie_data = pd.DataFrame()
+        self.genre_list, self.genre_dictionary = self.__get_genre_dictionary__()
         self.actors_list = []
         self.actors_dict = {}
         self.crew_map = {
@@ -23,23 +31,33 @@ class DataGather():
             "Director": [],
             "Producer": []
         }
+        self.word_list = []
+        self.word_dict = {}
+        self.metrics = {
+            "Genre": self.genre_list,
+            "Actor": self.actors_list, 
+            "Director": self.crew_list["Director"], 
+            "Producer": self.crew_list["Producer"], 
+            "Overview": self.word_list
+        }
 
 
     def __get_genre_dictionary__(self):
-        """ Build genre dictionary. """
         url = "https://api.themoviedb.org/3/genre/movie/list?language=en"
         headers = {
             "accept": "application/json",
             "Authorization": API_KEY
         }
         response = requests.get(url, headers=headers)
-        genre_list = json.loads(response.text)['genres']
+        genres = json.loads(response.text)['genres']
         genre_dict = {}
-        for i in genre_list:
+        genre_list = []
+        for i in genres:
             idx = i['id']
             name = i['name']
             genre_dict[idx] = name
-        return genre_dict
+            genre_list.append(idx)
+        return (genre_list, genre_dict)
 
 
     def get_movie_data(self, page_num: int):
@@ -95,9 +113,36 @@ class DataGather():
         return cur_list
 
 
+    def one_hot_encoding(self, metric_type, id_list):
+        if isinstance(id_list, str):
+            id_list = json.loads(id_list)
+        metric_list = self.metrics[metric_type]
+        cur_list = [0] * len(metric_list)
+        for id in id_list:
+            cur_list[metric_list.index(id)] = 1
+        return cur_list
+
+
+    def tokenize_overview(self, movie_id):
+        overview = self.master_movie_data[self.master_movie_data["id"] == movie_id]["overview"].values[0]
+        filtered_sentence = []
+        if isinstance(overview, str):
+            stop_words = set(stopwords.words('english'))
+            word_tokens = word_tokenize(overview)
+            word_tokens = [w.lower() for w in word_tokens]
+            filtered_sentence = [w for w in word_tokens if not w in stop_words]
+            filtered_sentence = [w for w in filtered_sentence if w.isalnum()]
+            lemmatizer = WordNetLemmatizer()
+            filtered_sentence = [lemmatizer.lemmatize(w) for w in filtered_sentence]
+            filtered_sentence = list(set(filtered_sentence))
+            for word in filtered_sentence:
+                if word not in self.word_dict:
+                    self.word_list.append(word)
+                    self.word_dict[word] = len(self.word_list) - 1
+        return filtered_sentence
+
 def main():
     """ Main driver. """
-    master_movie_data = pd.DataFrame()
     data_collector = DataGather()
     page_num = 1
     while True:
@@ -105,17 +150,41 @@ def main():
         if response.status_code != 400:
             movie_json = json.loads(response.text)['results']
             test = pd.json_normalize(movie_json)
-            master_movie_data = pd.concat([master_movie_data, test], ignore_index=True)
+            data_collector.master_movie_data = pd.concat([data_collector.master_movie_data, test], ignore_index=True)
             page_num += 1
         else:
             break
-    master_movie_data.loc[:, 'genre_names'] = master_movie_data['genre_ids'].apply(data_collector.get_genre_name)
-    master_movie_data.loc[:, 'actors'] = master_movie_data['id'].apply(data_collector.get_movie_actors)
-    master_movie_data.loc[:, "directors"] = master_movie_data.apply(
-        lambda row: data_collector.get_crew("Director", row["id"]), axis=1)
-    master_movie_data.loc[:, "producers"] = master_movie_data.apply(
-        lambda row: data_collector.get_crew("Producer", row["id"]), axis=1)
-    master_movie_data.to_csv("Master Movie Dataset.csv")
+    data_collector.master_movie_data.loc[:, 'genre_names'] = data_collector.master_movie_data['genre_ids'].apply(data_collector.get_genre_name)
+    data_collector.master_movie_data.loc[:, 'actors'] = data_collector.master_movie_data['id'].apply(data_collector.get_movie_actors)
+    data_collector.master_movie_data.loc[:, "directors"] = data_collector.master_movie_data.apply(
+        lambda row: data_collector.get_crew("Director", row["id"]),
+        axis=1)
+    data_collector.master_movie_data.loc[:, "producers"] = data_collector.master_movie_data.apply(
+        lambda row: data_collector.get_crew("Producer", row["id"]),
+        axis=1)
+    # one hot encoding for genre
+    data_collector.master_movie_data.loc[:, "one_hot_encoding_genres"] = data_collector.master_movie_data.apply(
+        lambda row: data_collector.one_hot_encoding("Genre", row["genre_ids"]),
+        axis=1)
+    # one hot encoding for actor
+    data_collector.master_movie_data.loc[:, "one_hot_ecoding_actors"] = data_collector.master_movie_data.apply(
+        lambda row: data_collector.one_hot_encoding("Actor", row["actors"]),
+        axis=1)
+    # one hot encoding for director
+    data_collector.master_movie_data.loc[:, "one_hot_encoding_director"] = data_collector.master_movie_data.apply(
+        lambda row: data_collector.one_hot_encoding("Director", row["directors"]),
+        axis=1)
+    # one hot encoding for producer
+    data_collector.master_movie_data.loc[:, "one_hot_encoding_producer"] = data_collector.master_movie_data.apply(
+        lambda row: data_collector.one_hot_encoding("Producer", row["producers"]),
+        axis=1)
+    data_collector.master_movie_data.loc[:, "tokenized_overview"] = data_collector.master_movie_data['id'].apply(
+        data_collector.tokenize_overview)
+    data_collector.master_movie_data.loc[:, "one_hot_ecoding_overview"] = data_collector.master_movie_data.apply(
+        lambda row: data_collector.one_hot_encoding("Overview", row["tokenized_overview"]),
+        axis=1)
+    print(data_collector.master_movie_data.shape)
+    data_collector.master_movie_data.to_csv("Master Movie Dataset.csv")
 
 
 if __name__ == "__main__":
