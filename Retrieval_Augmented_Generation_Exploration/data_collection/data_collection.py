@@ -21,7 +21,7 @@ class DataGather():
         self.actors_dict = {}
         self.crew_map = {
             "Director": ["Director", "Co-Director"],
-            "Producer": ["Producer", "Co-Producer"]
+            "Producer": ["Producer", "Co-Producer", "Executive Producer"]
         }
         self.crew_dict = {
             "Director": {}, 
@@ -102,10 +102,12 @@ class DataGather():
 
 
     def get_crew(self, crew_type, movie_id):
+        """ Populate crew list and dictionary while adding new column of the current crew of the movie_id. """
         movie_credit = self.get_movie_credits(movie_id)
         crew = movie_credit['crew']
         cur_list = []
         for c in crew:
+            if c["job"] in self.crew_map[crew_type]:
                 cur_list.append(c["name"])
                 if c["name"] not in self.crew_dict[crew_type]:
                     self.crew_list[crew_type].append(c["name"])
@@ -114,6 +116,7 @@ class DataGather():
 
 
     def one_hot_encoding(self, metric_type, id_list):
+        """ Create one hot encoding of the metric and the present indexes. """
         if isinstance(id_list, str):
             id_list = json.loads(id_list)
         metric_list = self.metrics[metric_type]
@@ -124,6 +127,7 @@ class DataGather():
 
 
     def tokenize_overview(self, movie_id):
+        """ Create word tokens for movie overview. """
         overview = self.master_movie_data[self.master_movie_data["id"] == movie_id]["overview"].values[0]
         filtered_sentence = []
         if isinstance(overview, str):
@@ -180,7 +184,7 @@ def main():
         axis=1)
     data_collector.master_movie_data.loc[:, "tokenized_overview"] = data_collector.master_movie_data['id'].apply(
         data_collector.tokenize_overview)
-    data_collector.master_movie_data.loc[:, "one_hot_ecoding_overview"] = data_collector.master_movie_data.apply(
+    data_collector.master_movie_data.loc[:, "one_hot_encoding_overview"] = data_collector.master_movie_data.apply(
         lambda row: data_collector.one_hot_encoding("Overview", row["tokenized_overview"]),
         axis=1)
     print(data_collector.master_movie_data.shape)
