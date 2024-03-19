@@ -145,6 +145,7 @@ class DataGather():
                     self.word_dict[word] = len(self.word_list) - 1
         return filtered_sentence
 
+
 def main():
     """ Main driver. """
     data_collector = DataGather()
@@ -187,8 +188,12 @@ def main():
     data_collector.master_movie_data.loc[:, "one_hot_encoding_overview"] = data_collector.master_movie_data.apply(
         lambda row: data_collector.one_hot_encoding("Overview", row["tokenized_overview"]),
         axis=1)
-    print(data_collector.master_movie_data.shape)
+    data_collector.master_movie_data = data_collector.master_movie_data[['genre_ids', 'id', 'original_language', 'original_title',
+    'overview', 'popularity', 'release_date', 'title', 'vote_average', 'vote_count', 'genre_names', 'actors', 'directors',
+    'producers', 'one_hot_encoding_genres', 'one_hot_ecoding_actors', 'one_hot_encoding_director', 'one_hot_encoding_producer',
+    'tokenized_overview', 'one_hot_encoding_overview']]
     data_collector.master_movie_data.to_csv("Master Movie Dataset.csv")
+    return data_collector
 
 
 if __name__ == "__main__":
