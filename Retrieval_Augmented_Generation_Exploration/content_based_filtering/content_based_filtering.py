@@ -2,6 +2,7 @@
 import pandas as pd
 # import requests
 import json
+import ast
 from scipy import spatial
 # from config import API_KEY
 
@@ -46,7 +47,7 @@ class contentBasedFiltering():
         one_hot_producer_2 = json.loads(df.loc[movie_2, "one_hot_encoding_producer"].iloc[0])
         producer_similarity = spatial.distance.cosine(one_hot_producer_1, one_hot_producer_2)
 
-        one_hot_overview_1 = json.loads(df.loc[movie_1, "one_hot_ecoding_overview"].iloc[0])
+        one_hot_overview_1 = json.loads(df.loc[movie_1, "one_hot_encoding_overview"].iloc[0])
         one_hot_overview_2 = json.loads(df.loc[movie_2, "one_hot_encoding_overview"].iloc[0])
         overview_similarity = spatial.distance.cosine(one_hot_overview_1, one_hot_overview_2)
 
@@ -81,6 +82,15 @@ class contentBasedFiltering():
     def metric_specific_filtering(self, df, have_or_without, specific_metrics_dict):
         """ Filter movie df to including specific metrics. """
         filtered_df = df
+        if isinstance(filtered_df['genre_names'].iloc[0], str):
+            filtered_df['genre_names'] = filtered_df['genre_names'].apply(ast.literal_eval)
+        if isinstance(filtered_df["actors"].iloc[0], str):
+            filtered_df['actors'] = filtered_df['actors'].apply(ast.literal_eval)
+        if isinstance(filtered_df["directors"].iloc[0], str):
+            filtered_df['directors'] = filtered_df['directors'].apply(ast.literal_eval)
+        if isinstance(filtered_df["producers"].iloc[0], str):
+            filtered_df['producers'] = filtered_df['producers'].apply(ast.literal_eval)
+
         for metric_type, metric_list in specific_metrics_dict.items():
             if len(metric_list) > 0:
                 if have_or_without == "contain":
@@ -118,12 +128,13 @@ class contentBasedFiltering():
         return metric_dict
 
 
-def main(master_df, movieID, movieName, genre=[], contain="contain", actors=[], directors=[], producers=[]):
+def main(masterDf, movieID, movieName, genre=[], contain="contain", actors=[], directors=[], producers=[]):
     """ Main Driver. """
     content_filtering = contentBasedFiltering()
     specific_metric_dict = content_filtering.populate_specific_metric_dict(genre, actors, directors, producers)
-    subset_movies = content_filtering.metric_specific_filtering(master_df, contain, specific_metric_dict)
-
+    subset_movies = content_filtering.metric_specific_filtering(masterDf, contain, specific_metric_dict)
+    if subset_movies.empty:
+        return subset_movies
     movie_1_list = [movieID] * len(subset_movies)
     movie_1_name = [movieName] * len(subset_movies)
     data_df = {
