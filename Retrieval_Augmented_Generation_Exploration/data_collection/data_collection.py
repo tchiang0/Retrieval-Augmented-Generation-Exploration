@@ -8,8 +8,8 @@ from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
 from config import API_KEY
 
-nltk.download('stopwords')
-nltk.download('all')
+nltk.download('stopwords', quiet=True)
+nltk.download('all', quiet=True)
 
 
 class DataGather():
