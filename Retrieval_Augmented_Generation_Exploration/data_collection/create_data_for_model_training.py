@@ -109,39 +109,86 @@ class createMetaData():
 
     def create_queries(self, movie_title, director, release_date):
         """ Create queries for training. """
-        movie_title_str = movie_title + " that's directed by " + director + " and released on " + release_date + "?"
+        movie_title_str = movie_title
+        if director:
+            movie_title_str += " directed by " + director
+        if release_date:
+            if not director:
+                movie_title_str += " released on " + release_date + "?"
+            else:
+                movie_title_str += " and released on " + release_date + "?"
+        else:
+            movie_title_str += "?"
+
         custom_queries = []
-        for q in self.queries: 
+        for q in self.queries:
             q_str = q + movie_title_str
             custom_queries.append(q_str)
         return custom_queries
 
 
     def create_answers(self, movie_meta_dict):
-        """ Create answers for training. """
         answers = []
-        ans = ""
-        for meta, val in movie_meta_dict.items():
+        for _, val in movie_meta_dict.items():
             val_str = ""
             if isinstance(val, list):
                 if val:
+                    val = [v.strip() for v in val]
                     if len(val) == 1:
-                        if meta == "directors":
-                            ans = "The director is "
-                        else:
-                            ans = f"The {meta} is "
                         val_str = val[0]
+                    elif len(val) == 2:
+                        val_str = val[0] + ' and ' + val[1]
                     else:
-                        ans = f"The {meta} are "
                         val_str = ', '.join(val[:-1]) + ', and ' + val[-1]
                 else:
-                    ans = f"The {meta} is unknown."
+                    val_str = "Unknown."
             else:
-                ans = f"The {meta} is "
                 val_str = str(val)
-            ans += val_str
-            answers.append(ans)
+            answers.append(val_str)
         return answers
+
+
+    def create_answer_idx(self, movie_doc, answers_list):
+        idx_list = []
+        for answer in answers_list:
+            start_idx = movie_doc.find(answer)
+            end_idx = -1
+            if start_idx != -1:
+                end_idx = start_idx + len(answer)
+                idx_list.append((start_idx, end_idx))
+            else:
+                answer_lowered = answer[:1].lower() + answer[1:]
+                start_idx = movie_doc.find(answer_lowered)
+                if start_idx != -1:
+                    end_idx = start_idx + len(answer_lowered)
+                    idx_list.append((start_idx, end_idx))
+                else:
+                    idx_list.append((-1, -1))
+        return idx_list
+
+
+    def format_data(self, movie_id, movie_title, movie_doc, queries_list, answers_list, idx_list):
+        """ Format data for question answering model. """
+        data_list = []
+        for i in range(len(answers_list)):
+            data_format = {
+                "answers":{
+                    "answer_idx": [],
+                    "text": []
+                },
+                "context": "",
+                "id": "",
+                "question": "",
+                "title": ""
+            }
+            data_format["context"] = movie_doc
+            data_format["id"] = movie_id
+            data_format["title"] = movie_title
+            data_format["question"] = queries_list[i]
+            data_format["answers"]["answer_idx"] = idx_list[i]
+            data_format["answers"]["text"] = answers_list[i]
+            data_list.append(data_format)
+        return data_list
 
 
     def load_progress(self, filename):
@@ -160,7 +207,6 @@ def main(df):
     progress_1 = create_meta.load_progress('progress_movie_id.json')
     progress_2 = create_meta.load_progress('progress_movie_id_2.json')
     for movie_id, movie_info in progress_1["movie_info_and_rating"].items():
-        print(f"Processing {movie_id}")
         temp_df = pd.DataFrame()
         movie_info = progress_1["movie_info_and_rating"][movie_id]
 
@@ -168,13 +214,33 @@ def main(df):
         if not movie_info["movie_info"] and not movie_info["movie_rating"]:
             if movie_id in progress_2["processed_ids"]:
                 movie_info = progress_2["movie_info_and_rating"][movie_id]
+        director_list = df.loc[df["id"] == int(movie_id), "directors"].iloc[0]
+        if isinstance(director_list, str):
+            director_list = ast.literal_eval(director_list)
+            if len(director_list):
+                if len(director_list) == 1:
+                    director = director_list[0]
+                elif len(director_list) == 2:
+                    director = director_list[0] + ' and ' + director_list[-1]
+                else:
+                    director = ', '.join(director_list[:-1]) + ', and ' + director_list[-1]
+            else:
+                director = ""
+        release_date = df.loc[df["id"] == int(movie_id), "release_date"].iloc[0]
+        if not release_date:
+            release_date = ""
+        movie_title = df.loc[df["id"] == int(movie_id), "original_title"].iloc[0]
 
         movie_meta_dict = create_meta.make_movie_meta_data(movie_id, df, movie_info)
         document_str = create_meta.create_document(movie_meta_dict)
+        query_list = create_meta.create_queries(movie_title, director, release_date)
         answer_list = create_meta.create_answers(movie_meta_dict)
-        temp_df["Document"] = [document_str] * len(answer_list)
-        temp_df["Queries"] = create_meta.queries
-        temp_df["Answers"] = answer_list
+        answer_idx_pair_list = create_meta.create_answer_idx(document_str, answer_list)
+        data_format_list = create_meta.format_data(movie_id, movie_title, document_str, query_list, answer_list, answer_idx_pair_list)
+        temp_df["document"] = [document_str] * len(answer_list)
+        temp_df["query"] = query_list
+        temp_df["answer"] = answer_list
+        temp_df["format_data"] = data_format_list
         custom_df = pd.concat([custom_df, temp_df])
     return custom_df
 
