@@ -73,10 +73,8 @@ To do:
 
 
 ## Acknowledgements
-Give credit here.
-- This project was inspired by...
-- This project was based on [this tutorial](https://www.example.com).
-- Many thanks to...
+- This project was inspired by needing to find a movie to watch.
+- This question ans answering model training was based on [this Hugging Face tutorial](https://huggingface.co/docs/transformers/tasks/question_answering).
 
 
 <!-- ## Contact
