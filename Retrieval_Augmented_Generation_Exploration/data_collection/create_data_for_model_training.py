@@ -167,27 +167,17 @@ class createMetaData():
         return idx_list
 
 
-    def format_data(self, movie_id, movie_title, movie_doc, queries_list, answers_list, idx_list):
-        """ Format data for question answering model. """
+    def format_answer_data(self, answers_list, idx_list):
+        # 'answers': {'text': ['Kazimierz Palace'], 'answer_start': [137]}}
         data_list = []
         for i in range(len(answers_list)):
             data_format = {
-                "answers":{
-                    "answer_idx": [],
-                    "text": []
-                },
-                "context": "",
-                "id": "",
-                "question": "",
-                "title": ""
+                "answer_idx": [],
+                "text": []
             }
-            data_format["context"] = movie_doc
-            data_format["id"] = movie_id
-            data_format["title"] = movie_title
-            data_format["question"] = queries_list[i]
-            data_format["answers"]["answer_idx"] = idx_list[i]
-            data_format["answers"]["text"] = answers_list[i]
-            data_list.append(data_format)
+            data_format["answer_idx"] = idx_list[i]
+            data_format["text"] = answers_list[i]
+            data_list.append(json.dumps(data_format))
         return data_list
 
 
@@ -236,11 +226,13 @@ def main(df):
         query_list = create_meta.create_queries(movie_title, director, release_date)
         answer_list = create_meta.create_answers(movie_meta_dict)
         answer_idx_pair_list = create_meta.create_answer_idx(document_str, answer_list)
-        data_format_list = create_meta.format_data(movie_id, movie_title, document_str, query_list, answer_list, answer_idx_pair_list)
-        temp_df["document"] = [document_str] * len(answer_list)
-        temp_df["query"] = query_list
-        temp_df["answer"] = answer_list
-        temp_df["format_data"] = data_format_list
+        data_format_list = create_meta.format_answer_data(answer_list, answer_idx_pair_list)
+        temp_df["id"] = [movie_id] * len(answer_list)
+        temp_df["title"] = [movie_title] * len(answer_list)
+        temp_df["context"] = [document_str] * len(answer_list)
+        temp_df["question"] = query_list
+        # 'answers': {'text': ['Kazimierz Palace'], 'answer_start': [137]}}
+        temp_df["answers"] = data_format_list
         custom_df = pd.concat([custom_df, temp_df])
     return custom_df
 
