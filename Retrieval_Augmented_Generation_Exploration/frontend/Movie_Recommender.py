@@ -6,6 +6,7 @@ from Retrieval_Augmented_Generation_Exploration.data_collection import data_coll
 
 @st.cache_data
 def fetch_and_clean_movie_data(in_place_str):
+    """ Cache meta movie dataframe to avoid rerun on re-render. """
     movie_data = pd.read_csv("Retrieval_Augmented_Generation_Exploration/Master Movie Dataset.csv")
     movie_data.rename(columns={'one_hot_ecoding_overview': 'one_hot_encoding_overview'}, inplace=True)
     return movie_data
