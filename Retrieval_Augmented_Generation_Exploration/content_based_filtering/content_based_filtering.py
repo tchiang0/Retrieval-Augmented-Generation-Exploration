@@ -130,6 +130,13 @@ class contentBasedFiltering():
 
 def main(masterDf, movieID, movieName, genre=[], contain="contain", actors=[], directors=[], producers=[]):
     """ Main Driver. """
+    metric_with_list = [genre, actors, directors, producers]
+    for met in metric_with_list:
+        if 'Any' in met:
+            if len(met) == 1:
+                met.clear()
+            else:
+                met.remove('Any')
     content_filtering = contentBasedFiltering()
     specific_metric_dict = content_filtering.populate_specific_metric_dict(genre, actors, directors, producers)
     subset_movies = content_filtering.metric_specific_filtering(masterDf, contain, specific_metric_dict)
