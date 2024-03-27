@@ -6,7 +6,7 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
-from config import API_KEY
+from Retrieval_Augmented_Generation_Exploration.config import API_KEY
 
 nltk.download('stopwords', quiet=True)
 nltk.download('all', quiet=True)
