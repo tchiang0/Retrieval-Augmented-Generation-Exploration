@@ -22,6 +22,13 @@ class movieChat():
             st.session_state.background_button = False
 
 
+    def print_save_chat_message(self, party, response):
+        """ Generate chat message from assistant and user. """
+        with st.chat_message(party):
+            st.markdown(response, unsafe_allow_html=True)
+        st.session_state.messages.append({"role": party, "content": response})
+
+
     def button_click_response_generator(self, res_type):
         """ Generate valid bot response given valid input. """
         for key in st.session_state.keys():
@@ -46,6 +53,7 @@ class movieChat():
 
 
     def handle_fav_movie_detail(self):
+        """ Handle favorite movie form submitted. """
         if 'movie_meta' not in st.session_state:
             st.session_state.movie_meta = {
                 "titles": [],
@@ -64,6 +72,7 @@ class movieChat():
 
 
     def gather_necessary_movie_detail(self):
+        """ Render favorite movie form and gather user input. """
         if st.session_state.recommender_button:
             with st.form(key="fav_movie_form", clear_on_submit=True):
                 movie_titles = st.selectbox(label='What is your favorite movie?',
@@ -86,6 +95,65 @@ class movieChat():
                                                  options=['Any', 'Kathleen Kennedy', 'Kevin Feige', 'Jason Blum'],
                                                  default=['Any'])
                 st.form_submit_button(label='submit', on_click=self.handle_fav_movie_detail)
+
+
+    def get_recommended_movies(self):
+        """ Get recommended movie from content based filtering (KNN). """
+        movie_ids = st.session_state.movie_df.loc[st.session_state.movie_df["original_title"] == st.session_state.movie_meta['titles'],
+                                                  "id"].tolist()
+        response = f"We found {len(movie_ids)} movies under the title {st.session_state.movie_meta['titles']}"
+        self.print_save_chat_message("assistant", response)
+        for idx in movie_ids:
+            temp_df = cbf.main(masterDf=st.session_state.movie_df,
+                                movieID=int(idx),
+                                movieName=st.session_state.movie_meta['titles'],
+                                genre=st.session_state.movie_meta['genres'],
+                                actors=st.session_state.movie_meta['actors'],
+                                directors=st.session_state.movie_meta['directors'],
+                                producers=st.session_state.movie_meta['producers'])
+            if 'sim_movie_df' not in st.session_state:
+                st.session_state.sim_movie_df = pd.DataFrame()
+            if st.session_state.sim_movie_df.empty:
+                st.session_state.sim_movie_df = temp_df
+            else:
+                movie_ids_in_sim_movie_df = st.session_state.sim_movie_df['Movie 1 ID'].unique().tolist()
+                if idx not in movie_ids_in_sim_movie_df:
+                    st.session_state.sim_movie_df = pd.concat([st.session_state.sim_movie_df, temp_df])
+
+    
+    def get_top_3_movies_all_metrics(self):
+        """ Return top 3 recommended movies based on all metric (sum of cosine distance). """
+        if len(st.session_state.movie_meta['genres']) == 1:
+            genre_str = st.session_state.movie_meta['genres'][0]
+        elif len(st.session_state.move_meta['genres']) == 2:
+            genre_str = st.session_state.movie_meta['genres'][0] + ' and ' + st.session_state.movie_meta['genre'][0]
+        else:
+            genre_str = ', '.join(st.session_state.movie_meta['genres'][:-1]) + ', and ' + st.session_state.movie_meta['genres'][-1]
+        response = f"Out of all the movies with {genre_str} genre(s), Here are the top 3 movies most related by the overall metrics: "
+        st.session_state.sim_movie_df['sum_of_values'] = st.session_state.sim_movie_df['cosine_sim_genre_actor_dir_prod_overview'].apply(sum)
+        df_sorted = st.session_state.sim_movie_df.sort_values(by='sum_of_values')
+        df_sorted = df_sorted.drop(columns=['sum_of_values'])
+        sort_by_sum_title = df_sorted["Movie 2 Name"].tolist()[:4]
+        title_str = ', '.join(sort_by_sum_title[1:-1]) + ', and ' + sort_by_sum_title[-1]
+        response += f"{title_str}"
+        return response
+    
+
+    def get_top_3_movies_user_metric(self, metric):
+        """ Return top 3 recommended movies based on user input metrics (genre, actor, director, and/or producer). """
+        if metric[-1] == 's':
+            metric = metric[:-1]
+        if metric == "genre":
+            df_sorted = st.session_state.sim_movie_df.iloc[st.session_state.sim_movie_df['cosine_sim_genre_actor_dir_prod_overview'].map(lambda x: x[0]).argsort()]
+        elif metric == "actor":
+            df_sorted = st.session_state.sim_movie_df.iloc[st.session_state.sim_movie_df['cosine_sim_genre_actor_dir_prod_overview'].map(lambda x: x[1]).argsort()]
+        elif metric == "director":
+            df_sorted = st.session_state.sim_movie_df.iloc[st.session_state.sim_movie_df['cosine_sim_genre_actor_dir_prod_overview'].map(lambda x: x[2]).argsort()]
+        else:
+            df_sorted = st.session_state.sim_movie_df.iloc[st.session_state.sim_movie_df['cosine_sim_genre_actor_dir_prod_overview'].map(lambda x: x[3]).argsort()]
+        sort_by_met_title = df_sorted["Movie 2 Name"].tolist()[:4]
+        title_str = ', '.join(sort_by_met_title[1:-1]) + ', and ' + sort_by_met_title[-1]
+        return title_str
 
 
     def render_movie_chatbot(self):
@@ -116,98 +184,37 @@ class movieChat():
             else:
                 if not st.session_state.background_button:
                     response = self.button_click_response_generator(selected_prompt)
+            self.print_save_chat_message("user", selected_prompt)
+            self.print_save_chat_message("assistant", response)
 
-            st.session_state.messages.append({"role": "user", "content": selected_prompt})
-            with st.chat_message("user"):
-                st.markdown(selected_prompt, unsafe_allow_html=True)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            with st.chat_message("assistant"):
-                st.markdown(response, unsafe_allow_html=True)
-
-
-        # Accept user input after a button is pushed
         if st.session_state.recommender_button and ('form_submitted' not in st.session_state or st.session_state.form_submitted == False):
             self.gather_necessary_movie_detail()
 
         if "movie_meta" in st.session_state and "refine_rec" not in st.session_state:
-            movie_ids = st.session_state.movie_df.loc[st.session_state.movie_df["original_title"] == st.session_state.movie_meta['titles'], "id"].tolist()
-            response = f"We found {len(movie_ids)} movies under the title {st.session_state.movie_meta['titles']}"
-            with st.chat_message("assistant"):
-                st.markdown(response, unsafe_allow_html=True)
-            for idx in movie_ids:
-                temp_df = cbf.main(masterDf=st.session_state.movie_df,
-                                   movieID=int(idx),
-                                   movieName=st.session_state.movie_meta['titles'],
-                                   genre=st.session_state.movie_meta['genres'],
-                                   actors=st.session_state.movie_meta['actors'],
-                                   directors=st.session_state.movie_meta['directors'],
-                                   producers=st.session_state.movie_meta['producers'])
-                if 'sim_movie_df' not in st.session_state:
-                    st.session_state.sim_movie_df = pd.DataFrame()
-                if st.session_state.sim_movie_df.empty:
-                    st.session_state.sim_movie_df = temp_df
-                else:
-                    movie_ids_in_sim_movie_df = st.session_state.sim_movie_df['Movie 1 ID'].unique().tolist()
-                    if idx not in movie_ids_in_sim_movie_df:
-                        st.session_state.sim_movie_df = pd.concat([st.session_state.sim_movie_df, temp_df])
-            with st.chat_message("assistant"):
-                if st.session_state.sim_movie_df.empty:
-                    response = "There are no movies based on your chosen genres, actors, directors, and producers collection.\
-                        Please try again with other selections. (For example, instead of selecting all genres, try selecting 'Any'!)"
-                elif st.session_state.movie_meta['genres'] != []:
-                    if len(st.session_state.movie_meta['genres']) == 1:
-                        genre_str = st.session_state.movie_meta['genres'][0]
-                    elif len(st.session_state.move_meta['genres']) == 2:
-                        genre_str = st.session_state.movie_meta['genres'][0] + ' and ' + st.session_state.movie_meta['genre'][0]
-                    else:
-                        genre_str = ', '.join(st.session_state.movie_meta['genres'][:-1]) + ', and ' + st.session_state.movie_meta['genres'][-1]
-                    response = f"Out of all the movies with {genre_str} genre(s), Here are the top 3 movies most related by the overall metrics: "
-                    st.session_state.sim_movie_df['sum_of_values'] = st.session_state.sim_movie_df['cosine_sim_genre_actor_dir_prod_overview'].apply(sum)
-                    df_sorted = st.session_state.sim_movie_df.sort_values(by='sum_of_values')
-                    df_sorted = df_sorted.drop(columns=['sum_of_values'])
-                    sort_by_sum_title = df_sorted["Movie 2 Name"].tolist()[:4]
-                    title_str = ', '.join(sort_by_sum_title[1:-1]) + ', and ' + sort_by_sum_title[-1]
-                    response += f"{title_str}"
-                st.markdown(response, unsafe_allow_html=True)
-                st.session_state.messages.append({"role": "assistant", "content": response})
-                if 'refine_rec' not in st.session_state:
-                    st.session_state.refine_rec = True
+            self.get_recommended_movies()
+            if st.session_state.sim_movie_df.empty:
+                response = "There are no movies based on your chosen genres, actors, directors, and producers collection.\
+                    Please try again with other selections. (For example, instead of selecting all genres, try selecting 'Any'!)"
+            else:
+                response = self.get_top_3_movies_all_metrics()
+            self.print_save_chat_message("assistant", response)
+            if 'refine_rec' not in st.session_state:
+                st.session_state.refine_rec = True
 
         if 'refine_rec' in st.session_state:
             response = "Do you want a more refined recommendation? For example, do you want know the most similar movies by genres? By actors? By directors? Or by producers?"
-            with st.chat_message("assistant"):
-                st.markdown(response, unsafe_allow_html=True)
+            self.print_save_chat_message("assistant", response)
             if prompt := st.chat_input("Please let me know what metrics to recommend by. (Ex, genre actor director producer)"):
+                self.print_save_chat_message("user", prompt)
                 met_list = prompt.split()
                 for met in met_list:
-                    if met[-1] == 's':
-                        met = met[:-1]
-                    if met == "genre":
-                        df_sorted = st.session_state.sim_movie_df.iloc[st.session_state.sim_movie_df['cosine_sim_genre_actor_dir_prod_overview'].map(lambda x: x[0]).argsort()]
-                    elif met == "actor":
-                        df_sorted = st.session_state.sim_movie_df.iloc[st.session_state.sim_movie_df['cosine_sim_genre_actor_dir_prod_overview'].map(lambda x: x[1]).argsort()]
-                    elif met == "director":
-                        df_sorted = st.session_state.sim_movie_df.iloc[st.session_state.sim_movie_df['cosine_sim_genre_actor_dir_prod_overview'].map(lambda x: x[2]).argsort()]
-                    else:
-                        df_sorted = st.session_state.sim_movie_df.iloc[st.session_state.sim_movie_df['cosine_sim_genre_actor_dir_prod_overview'].map(lambda x: x[3]).argsort()]
-                    sort_by_met_title = df_sorted["Movie 2 Name"].tolist()[:4]
-                    title_str = ', '.join(sort_by_met_title[1:-1]) + ', and ' + sort_by_met_title[-1]
+                    title_str = self.get_top_3_movies_user_metric(met)
                     response = f"Recommending by the most similar {met}, here are the top 3 movies: {title_str}"
-                    with st.chat_message("assistant"):
-                        st.markdown(response, unsafe_allow_html=True)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
+                    self.print_save_chat_message("assistant", response)
             del st.session_state['refine_rec']
-            # Add user message to chat history
-            # st.session_state.messages.append({"role": "user", "content": prompt})
-            # # Display user message in chat message container
-            # with st.chat_message("user"):
-            #     st.markdown(prompt)
 
-            # # Display assistant response in chat message container
-            # with st.chat_message("assistant"):
-            #     response = st.write_stream(self.response_generator())
-            # # Add assistant response to chat history
-            # st.session_state.messages.append({"role": "assistant", "content": response})
+        # Prompt user to click on the Movie Know It All button and remind them to remember the movie title
+        # ask questions!!
 
         for key in st.session_state.keys():
             print(f"{key} has {st.session_state[key]}")
@@ -215,4 +222,16 @@ class movieChat():
 if __name__ == "__main__":
     infobot_page = movieChat()
     infobot_page.render_movie_chatbot()
+
 # if prompt := st.chat_input("Please select either of the two buttons to start!!!"):
+# Add user message to chat history
+# st.session_state.messages.append({"role": "user", "content": prompt})
+# # Display user message in chat message container
+# with st.chat_message("user"):
+#     st.markdown(prompt)
+
+# # Display assistant response in chat message container
+# with st.chat_message("assistant"):
+#     response = st.write_stream(self.response_generator())
+# # Add assistant response to chat history
+# st.session_state.messages.append({"role": "assistant", "content": response})
