@@ -10,7 +10,6 @@ class createMetaData():
         self.queries = [
             "What is the movie title for the movie ",
             "What is the overview for the movie ",
-            "Can you give me the info for the movie ",
             "What is the rating for the movie ",
             "When's the release date for the movie ",
             "What are the genres for the movie ",
@@ -59,7 +58,7 @@ class createMetaData():
             elif len(prod_list) == 2:
                 prod_str = ' and '.join(prod_list)
             else:
-                prod_str = ', '.join(prod_list[:-1]) + ', and ' + prod_list[-1]
+                prod_str = ', '.join(prod_list[:2]) + ', and ' + prod_list[2]
             doc_str += f"and produced by {prod_str}, "
         else:
             doc_str += ", "
@@ -70,8 +69,13 @@ class createMetaData():
         # actors
         actors_list = movie_meta_dict["actors"]
         if actors_list:
-            actors_str = ', '.join(actors_list[:-1]) + ', and ' + actors_list[-1]
-            doc_str += f"The full cast of the {movie_title} includes: {actors_str}. "
+            if len(actors_list) == 1:
+                actor_str = actors_list[0]
+            elif len(actors_list) == 2:
+                actor_str = ' and '.join(actors_list)
+            else:
+                actor_str = ', '.join(actors_list[:2]) + ', and ' + actors_list[2]
+            doc_str += f"Some actors of the {movie_title} includes: {actor_str}. "
 
         # rating
         rating = movie_meta_dict["ratings"]
@@ -99,27 +103,19 @@ class createMetaData():
             if doc_str[-1] not in string.punctuation:
                 doc_str += "."
             doc_str += " "
-
-        # info
-        info = movie_meta_dict["info"]
-        if info:
-            doc_str += f"Additionally, {info[0]}"
+        else:
+            # info
+            info = movie_meta_dict["info"]
+            if info:
+                info_str = info[0]
+                lower_info = info_str[:1].lower() + info_str[1:]
+                doc_str += f"The overview of the movie is that {lower_info}"
         return doc_str
 
 
     def create_queries(self, movie_title, director, release_date):
         """ Create queries for training. """
-        movie_title_str = movie_title
-        if director:
-            movie_title_str += " directed by " + director
-        if release_date:
-            if not director:
-                movie_title_str += " released on " + release_date + "?"
-            else:
-                movie_title_str += " and released on " + release_date + "?"
-        else:
-            movie_title_str += "?"
-
+        movie_title_str = movie_title + "?"
         custom_queries = []
         for q in self.queries:
             q_str = q + movie_title_str
@@ -129,7 +125,12 @@ class createMetaData():
 
     def create_answers(self, movie_meta_dict):
         answers = []
-        for _, val in movie_meta_dict.items():
+        has_overview = False
+        for metric, val in movie_meta_dict.items():
+            if metric == "overview" and val != "":
+                has_overview = True
+            if metric == 'info' and has_overview:
+                continue
             val_str = ""
             if isinstance(val, list):
                 if val:
@@ -139,7 +140,10 @@ class createMetaData():
                     elif len(val) == 2:
                         val_str = val[0] + ' and ' + val[1]
                     else:
-                        val_str = ', '.join(val[:-1]) + ', and ' + val[-1]
+                        if metric == "genre names":
+                            val_str = ', '.join(val[:-1]) + ', and ' + val[-1]
+                        else:
+                            val_str = ', '.join(val[:2]) + ', and ' + val[2]
                 else:
                     val_str = "Unknown."
             else:
@@ -223,7 +227,7 @@ def main(df):
 
         movie_meta_dict = create_meta.make_movie_meta_data(movie_id, df, movie_info)
         document_str = create_meta.create_document(movie_meta_dict)
-        query_list = create_meta.create_queries(movie_title, director, release_date)
+        query_list = create_meta.create_queries(movie_title)
         answer_list = create_meta.create_answers(movie_meta_dict)
         answer_idx_pair_list = create_meta.create_answer_idx(document_str, answer_list)
         data_format_list = create_meta.format_answer_data(answer_list, answer_idx_pair_list)
@@ -231,7 +235,6 @@ def main(df):
         temp_df["title"] = [movie_title] * len(answer_list)
         temp_df["context"] = [document_str] * len(answer_list)
         temp_df["question"] = query_list
-        # 'answers': {'text': ['Kazimierz Palace'], 'answer_start': [137]}}
         temp_df["answers"] = data_format_list
         custom_df = pd.concat([custom_df, temp_df])
     return custom_df
