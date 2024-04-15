@@ -1,9 +1,13 @@
+""" Movie Recommender Know-It-All Chatbot. """
 import pandas as pd
 import streamlit as st
 from Retrieval_Augmented_Generation_Exploration.content_based_filtering import content_based_filtering as cbf
 from Retrieval_Augmented_Generation_Exploration.data_collection import data_collection as dc
 from Retrieval_Augmented_Generation_Exploration.model.question_answer import GenerateAnswer as ga
 
+
+# set web title and icon
+st.set_page_config(page_title="Movie Recommender Info Bot", page_icon="🍿")
 
 @st.cache_data
 def fetch_and_clean_movie_data(in_place_str):
@@ -36,6 +40,10 @@ class movieChat():
         for key in st.session_state.keys():
             if key != 'messages':
                 del st.session_state[key]
+        if "recommender_button" not in st.session_state:
+            st.session_state.recommender_button = False
+        if "background_button" not in st.session_state:
+            st.session_state.background_button = False
         valid_button_vals = ["Recommend me movies!!", "Movie Background Know-It-All"]
         if not isinstance(res_type, str):
             raise TypeError("[Wrong response type] response should be a string")
@@ -72,13 +80,9 @@ class movieChat():
         if 'form_submitted' not in st.session_state:
             st.session_state.form_submitted = True
 
-    
+
     def handle_movie_background_select(self):
         """ Handle interested movie selection. """
-        # movie title
-        response = f"The title of the movie you're interested in is {st.session_state.movie_of_interest}"
-        # movie questions
-        response += f", and here a list of questions you are asking: {st.session_state.movie_questions}"
         if 'movie_interested_form_submitted' not in st.session_state:
             st.session_state.movie_interested_form_submitted = True
 
@@ -132,13 +136,13 @@ class movieChat():
                 if idx not in movie_ids_in_sim_movie_df:
                     st.session_state.sim_movie_df = pd.concat([st.session_state.sim_movie_df, temp_df])
 
-    
+
     def get_top_3_movies_all_metrics(self):
         """ Return top 3 recommended movies based on all metric (sum of cosine distance). """
         if len(st.session_state.movie_meta['genres']) == 1:
             genre_str = st.session_state.movie_meta['genres'][0]
-        elif len(st.session_state.move_meta['genres']) == 2:
-            genre_str = st.session_state.movie_meta['genres'][0] + ' and ' + st.session_state.movie_meta['genre'][0]
+        elif len(st.session_state.movie_meta['genres']) == 2:
+            genre_str = st.session_state.movie_meta['genres'][0] + ' and ' + st.session_state.movie_meta['genres'][0]
         else:
             genre_str = ', '.join(st.session_state.movie_meta['genres'][:-1]) + ', and ' + st.session_state.movie_meta['genres'][-1]
         response = f"Out of all the movies with {genre_str} genre(s), Here are the top 3 movies most related by the overall metrics: "
@@ -149,7 +153,7 @@ class movieChat():
         title_str = ', '.join(sort_by_sum_title[1:-1]) + ', and ' + sort_by_sum_title[-1]
         response += f"{title_str}"
         return response
-    
+
 
     def get_top_3_movies_user_metric(self, metric):
         """ Return top 3 recommended movies based on user input metrics (genre, actor, director, and/or producer). """
@@ -166,6 +170,34 @@ class movieChat():
         sort_by_met_title = df_sorted["Movie 2 Name"].tolist()[:4]
         title_str = ', '.join(sort_by_met_title[1:-1]) + ', and ' + sort_by_met_title[-1]
         return title_str
+
+
+    def get_answers(self, all_questions):
+        """ Given the movie title and questions, generate answers using trained distilBERT qa model. """
+        question_answering_mod = ga()
+        indices = [all_questions.index(item) for item in st.session_state.movie_questions]
+        answer_list = question_answering_mod.answer_general(indices, st.session_state.movie_of_interest)
+        answer_idx = 0
+        res_list = []
+        for idx in indices:
+            response = ""
+            if idx == 0:
+                response = f"The genre of {st.session_state.movie_of_interest} is/are {answer_list[answer_idx]}."
+            elif idx == 1:
+                response = f"The director(s) of {st.session_state.movie_of_interest} is/are {answer_list[answer_idx]}."
+            elif idx == 2:
+                response = f"The producer(s) of {st.session_state.movie_of_interest} is/are {answer_list[answer_idx]}."
+            elif idx == 3:
+                response = f"The rating of {st.session_state.movie_of_interest} is {answer_list[answer_idx]}."
+            elif idx == 4:
+                response = f"The release date of {st.session_state.movie_of_interest} is {answer_list[answer_idx]}."
+            elif idx == 5:
+                response = f"Some actors that starred in {st.session_state.movie_of_interest} is/are {answer_list[answer_idx]}."
+            else:
+                response = f"The overview of the {st.session_state.movie_of_interest} is: {answer_list[answer_idx]}"
+            res_list.append(response)
+            answer_idx += 1
+        return res_list
 
 
     def render_movie_chatbot(self):
@@ -188,14 +220,12 @@ class movieChat():
             if st.button("Movie Background Know-It-All"):
                 selected_prompt = "Movie Background Know-It-All"
 
-        # Handle the selection from "Recommend me movies!!"
+        # Handle the button selection
         if 'selected_prompt' in locals():
             if selected_prompt == "Recommend me movies!!":
-                if not st.session_state.recommender_button:
-                    response = self.button_click_response_generator(selected_prompt)
+                response = self.button_click_response_generator(selected_prompt)
             else:
-                if not st.session_state.background_button:
-                    response = self.button_click_response_generator(selected_prompt)
+                response = self.button_click_response_generator(selected_prompt)
             self.print_save_chat_message("user", selected_prompt)
             self.print_save_chat_message("assistant", response)
 
@@ -246,29 +276,11 @@ class movieChat():
             else:
                 response = f"The title of the movie you're interested in is {st.session_state.movie_of_interest}."
                 response += f"\n Here are the questions you are interested in {st.session_state.movie_questions}"
-                question_answering_mod = ga()
-                indices = [all_questions.index(item) for item in st.session_state.movie_questions]
-                answer_list = question_answering_mod.answer_general(indices, st.session_state.movie_of_interest)
-                answer_idx = 0
-                for idx in indices:
-                    response = ""
-                    if idx == 0:
-                        response = f"The genre of {st.session_state.movie_of_interest} is/are {answer_list[answer_idx]}."
-                    elif idx == 1:
-                        response = f"The director(s) of {st.session_state.movie_of_interest} is/are {answer_list[answer_idx]}."
-                    elif idx == 2:
-                        response = f"The producer(s) of {st.session_state.movie_of_interest} is/are {answer_list[answer_idx]}."
-                    elif idx == 3:
-                        response = f"The rating of {st.session_state.movie_of_interest} is {answer_list[answer_idx]}."
-                    elif idx == 4:
-                        response = f"The release date of {st.session_state.movie_of_interest} is {answer_list[answer_idx]}."
-                    elif idx == 5:
-                        response = f"Some actors that starred in {st.session_state.movie_of_interest} is/are {answer_list[answer_idx]}."
-                    else:
-                        response = f"The overview of the {st.session_state.movie_of_interest} is: {answer_list[answer_idx]}"
-                    answer_idx += 1
-                    self.print_save_chat_message("assistant", response)
-
+                res_list = self.get_answers(all_questions)
+                for res in res_list:
+                    self.print_save_chat_message("assistant", res)
+                response = "If you want to know more about this movie or others, or get other movie recommendations, please click the buttons above!!"
+                self.print_save_chat_message("assistant", response)
 
 
         for key in st.session_state.keys():
@@ -281,16 +293,3 @@ class movieChat():
 if __name__ == "__main__":
     infobot_page = movieChat()
     infobot_page.render_movie_chatbot()
-
-# if prompt := st.chat_input("Please select either of the two buttons to start!!!"):
-# Add user message to chat history
-# st.session_state.messages.append({"role": "user", "content": prompt})
-# # Display user message in chat message container
-# with st.chat_message("user"):
-#     st.markdown(prompt)
-
-# # Display assistant response in chat message container
-# with st.chat_message("assistant"):
-#     response = st.write_stream(self.response_generator())
-# # Add assistant response to chat history
-# st.session_state.messages.append({"role": "assistant", "content": response})
