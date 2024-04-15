@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 from Retrieval_Augmented_Generation_Exploration.content_based_filtering import content_based_filtering as cbf
 from Retrieval_Augmented_Generation_Exploration.data_collection import data_collection as dc
+from Retrieval_Augmented_Generation_Exploration.model.question_answer import GenerateAnswer as ga
 
 
 @st.cache_data
@@ -70,6 +71,16 @@ class movieChat():
         st.session_state.movie_meta['producers'] = st.session_state.movie_producers
         if 'form_submitted' not in st.session_state:
             st.session_state.form_submitted = True
+
+    
+    def handle_movie_background_select(self):
+        """ Handle interested movie selection. """
+        # movie title
+        response = f"The title of the movie you're interested in is {st.session_state.movie_of_interest}"
+        # movie questions
+        response += f", and here a list of questions you are asking: {st.session_state.movie_questions}"
+        if 'movie_interested_form_submitted' not in st.session_state:
+            st.session_state.movie_interested_form_submitted = True
 
 
     def gather_necessary_movie_detail(self):
@@ -213,12 +224,59 @@ class movieChat():
                     response = f"Recommending by the most similar {met}, here are the top 3 movies: {title_str}"
                     self.print_save_chat_message("assistant", response)
             del st.session_state['refine_rec']
+            prompt_know_it_all_click = "To learn more about a specific movie, click the **Movie Background Know-It-All** Button!"
+            self.print_save_chat_message("assistant", prompt_know_it_all_click) 
 
         # Prompt user to click on the Movie Know It All button and remind them to remember the movie title
-        # ask questions!!
+        if st.session_state.background_button:
+            all_questions = ["What is the genre?", "Who is/are the director(s)?",
+                             "Who is/are the producer(s)?", "What is the rating?",
+                             "When is/was the release date?", "Who are some of the actors?",
+                             "Give me an overview of the movie!"]
+            if "movie_interested_form_submitted" not in st.session_state or not st.session_state.movie_interested_form_submitted:
+                with st.form(key="movie_of_interest", clear_on_submit=True):
+                    movie_of_interest = st.selectbox(label="Please let me know which movie you are interested in!",
+                                                    key="movie_of_interest",
+                                                    options=["Kung Fu Panda 4", "Poor Things", "Atomic Blonde", "Legacy"])
+                    movie_related_questions =  st.multiselect(label='What are some questions you have about the movie?',
+                                                                key="movie_questions",
+                                                                options=all_questions,
+                                                                default=["What is the genre?"])
+                    st.form_submit_button(label='submit', on_click=self.handle_movie_background_select)
+            else:
+                response = f"The title of the movie you're interested in is {st.session_state.movie_of_interest}."
+                response += f"\n Here are the questions you are interested in {st.session_state.movie_questions}"
+                question_answering_mod = ga()
+                indices = [all_questions.index(item) for item in st.session_state.movie_questions]
+                answer_list = question_answering_mod.answer_general(indices, st.session_state.movie_of_interest)
+                answer_idx = 0
+                for idx in indices:
+                    response = ""
+                    if idx == 0:
+                        response = f"The genre of {st.session_state.movie_of_interest} is/are {answer_list[answer_idx]}."
+                    elif idx == 1:
+                        response = f"The director(s) of {st.session_state.movie_of_interest} is/are {answer_list[answer_idx]}."
+                    elif idx == 2:
+                        response = f"The producer(s) of {st.session_state.movie_of_interest} is/are {answer_list[answer_idx]}."
+                    elif idx == 3:
+                        response = f"The rating of {st.session_state.movie_of_interest} is {answer_list[answer_idx]}."
+                    elif idx == 4:
+                        response = f"The release date of {st.session_state.movie_of_interest} is {answer_list[answer_idx]}."
+                    elif idx == 5:
+                        response = f"Some actors that starred in {st.session_state.movie_of_interest} is/are {answer_list[answer_idx]}."
+                    else:
+                        response = f"The overview of the {st.session_state.movie_of_interest} is: {answer_list[answer_idx]}"
+                    answer_idx += 1
+                    self.print_save_chat_message("assistant", response)
+
+
 
         for key in st.session_state.keys():
             print(f"{key} has {st.session_state[key]}")
+
+
+
+        
 
 if __name__ == "__main__":
     infobot_page = movieChat()
