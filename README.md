@@ -1,9 +1,6 @@
 # Movie Recommendation and Introduction ChatBot
-
-
-https://github.com/tchiang0/Retrieval_Augmented_Generation_Exploration/assets/155696352/f66cceee-e992-4819-95e3-4166ca088710
-
-
+> Outline a brief description of your project.
+> Live demo [_here_](Movie_demo.mov). <!-- If you have the project hosted somewhere, include the link here. -->
 
 ## Table of Contents
 * [General Info](#general-information)
@@ -15,8 +12,6 @@ https://github.com/tchiang0/Retrieval_Augmented_Generation_Exploration/assets/15
 * [Project Status](#project-status)
 * [Room for Improvement](#room-for-improvement)
 * [Acknowledgements](#acknowledgements)
-* [Contact](#contact)
-<!-- * [License](#license) -->
 
 
 ## General Information
@@ -36,7 +31,6 @@ This project aims to enhance the movie-watching experience by solving two main p
 
 
 ## Features
-List the ready features here:
 - **Personalized Movie Recommendations**: Based on users' favorite genres, directors, producers, and actors, the chatbot recommends the top three movies
 
 - **Individual Attribute Based Movie Recommedations**: Users can specify the most important metric they are interested in, for example, want the movies recommendation to be closest in genre similarites, the chatbot will recommend three movies most similar in terms of genre while considering other attributes.
