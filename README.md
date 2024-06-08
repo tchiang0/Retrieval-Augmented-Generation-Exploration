@@ -1,6 +1,6 @@
 # Movie Recommendation and Introduction ChatBot
-> Outline a brief description of your project.
-> Live demo [_here_](Movie_demo.mov). <!-- If you have the project hosted somewhere, include the link here. -->
+
+https://github.com/tchiang0/Retrieval_Augmented_Generation_Exploration/assets/155696352/f889685c-2f90-4e1c-84da-cec6b86a5357
 
 ## Table of Contents
 * [General Info](#general-information)
